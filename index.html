@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enerlystic | Solar Atlas</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --brand:#16A34A;   /* green-600 */
+  --brand2:#166534;  /* green-800 */
+  --bg1:#F0FDF4;     /* green-50 */
+  --bg2:#DCFCE7;     /* green-100 */
+  --accent:#0EA5E9;  /* sky-500 */
+}
+
+*{box-sizing:border-box}
+body{
+    margin:0;
+    font-family:'Poppins',system-ui,-apple-system,sans-serif;
+    color:#0f172a;
+    background:
+        radial-gradient(60% 45% at 15% 0%, rgba(255,186,90,.18) 0%, rgba(255,186,90,0) 60%),
+        radial-gradient(50% 40% at 90% 10%, rgba(14,165,233,.12) 0%, rgba(14,165,233,0) 60%),
+        linear-gradient(180deg, var(--bg1), var(--bg2));
+}
+a{color:inherit;text-decoration:none}
+.layout{display:grid;grid-template-columns:320px 1fr;min-height:100vh}
+
+.sidebar{
+    background:linear-gradient(180deg,var(--brand),var(--brand2));
+    color:#fff;
+    padding:28px 22px;
+    position:sticky; top:0; height:100vh;
+    box-shadow: 0 10px 30px rgba(0,0,0,.12);
+}
+.logo{font-weight:800;font-size:42px;letter-spacing:.5px;margin-bottom:28px}
+
+.sidebar .nav-item{
+    display:block; margin:26px 0 18px; padding:10px 12px;
+    font-weight:700; font-size:20px; line-height:1.2;
+    color:#fff; border-radius:12px;
+    text-shadow:0 1px 1px rgba(0,0,0,.18);
+    transition: background .2s ease, transform .2s ease;
+}
+.sidebar .nav-item small{
+    display:block; margin-top:6px;
+    font-weight:600; font-size:13px; line-height:1.3;
+    color:rgba(255,255,255,.95);
+}
+.sidebar .nav-item:hover{ background:rgba(255,255,255,.14); transform: translateY(-1px); }
+
+.content{padding:28px 36px}
+.header h1{margin:0;font-size:32px;font-weight:800;letter-spacing:.5px}
+.header p{margin:8px 0 22px;color:var(--muted)}
+
+.card{
+    background:var(--card);
+    border-radius:18px;
+    border:1px solid rgba(0,0,0,.05);
+    box-shadow:0 12px 28px rgba(0,0,0,.08);
+    padding:20px
+}
+
+.map-card{padding:0;overflow:hidden}
+.map-card .map-wrapper{width:100%;height:calc(100vh - 180px)}
+/* 지도 높이 전파 (folium 상위/하위 div 모두 100%) */
+.map-card .map-wrapper > div{height:100%}
+.map-card .map-wrapper .folium-map{height:100% !important}
+.map-card .map-wrapper > div > div{height:100%}
+.map-card .map-wrapper > div > div > div{height:100%}
+
+.badge{
+    display:inline-block;background:#FFE4C7;color:#7C2D12;
+    padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700
+}
+.anchor{scroll-margin-top:18px}
+
+@media(max-width:1100px){
+    .map-card .map-wrapper{height:70vh}
+    .layout{grid-template-columns:1fr}
+    .sidebar{position:relative;height:auto;border-radius:0 0 18px 18px}
+}
+
+/* === 라인차트 그리드 (2열 → 반응형) === */
+.charts-grid{
+    margin-top:16px;
+    padding:14px;
+    display:grid;
+    grid-template-columns: repeat(2, minmax(420px, 1fr));
+    gap:16px;
+}
+.charts-grid .chart{ min-height:460px; }
+.charts-grid .chart > div{ width:100% !important; height:100% !important; }
+
+/* 특정 차트를 가로 전체로 펼치고 싶을 때 */
+.charts-grid .span-2{ grid-column: 1 / -1; }
+
+@media (max-width: 1400px){
+  .charts-grid{ grid-template-columns: 1fr; } /* 화면이 좁아지면 1열 */
+}
+
+/* 후보지 요약 줄(지역명 있는 라인)만 크게 */
+.site-summary { 
+    font-size: 18px;
+    line-height: 1.6;
+}
+.site-summary .site-name { 
+    font-size: 20px;
+    font-weight: 800;
+}
+</style>
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <div class="logo">☀️ Enerlystic</div>
+        <a class="nav-item" href="#data">데이터 모음<small>2024 데이터 자료 비교 분석</small></a>
+        <a class="nav-item" href="#plants">태양광 발전소 현황<small>발전소 현황 및 후보지 시각화</small></a>
+        <a class="nav-item" href="#candidates">태양광 후보지 발전소<small>장•단점 요약</small></a>
+    </aside>
+
+    <main class="content">
+
+    <!-- 데이터 모음 -->
+    <div id="data" class="anchor"></div>
+    <div class="header">
+        <span class="badge">데이터 모음</span>
+        <h1>2024년 지역별 비교</h1>
+        <p>일사량(MJ/m²) vs 설비이용률(%) 버블 차트</p>
+    </div>
+    <section class="card" style="padding:10px 10px 0">
+        <div>                        <script type="text/javascript">window.PlotlyConfig = {MathJaxConfig: 'local'};</script>
+        <script charset="utf-8" src="https://cdn.plot.ly/plotly-3.0.0.min.js"></script>                <div id="6c9b419d-64ca-4756-9bd5-b7382bee98fe" class="plotly-graph-div" style="height:720px; width:100%;"></div>            <script type="text/javascript">                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("6c9b419d-64ca-4756-9bd5-b7382bee98fe")) {                    Plotly.newPlot(                        "6c9b419d-64ca-4756-9bd5-b7382bee98fe",                        [{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\uc11c\uc6b8\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\uc11c\uc6b8"],"legendgroup":"\uc11c\uc6b8","marker":{"color":"#E74C3C","size":{"dtype":"f8","bdata":"AAAAAAAASUA="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\uc11c\uc6b8","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"VVVVVVVFe0A="},"xaxis":"x","y":{"dtype":"f8","bdata":"J4M5pn8yKkA="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\uac15\uc6d0\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\uac15\uc6d0"],"legendgroup":"\uac15\uc6d0","marker":{"color":"#F1C40F","size":{"dtype":"f8","bdata":"AAAAAABcnkA="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\uac15\uc6d0","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"VVVVVVWBeUA="},"xaxis":"x","y":{"dtype":"f8","bdata":"hvwIo4unKUA="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\uacbd\ub0a8\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\uacbd\ub0a8"],"legendgroup":"\uacbd\ub0a8","marker":{"color":"#00BCD4","size":{"dtype":"f8","bdata":"AAAAAACAn0A="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\uacbd\ub0a8","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"VVVVVVUdfUA="},"xaxis":"x","y":{"dtype":"f8","bdata":"1M1PNz\u002f1KEA="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\uacbd\ubd81\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\uacbd\ubd81"],"legendgroup":"\uacbd\ubd81","marker":{"color":"#E91E63","size":{"dtype":"f8","bdata":"AAAAAAAErkA="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\uacbd\ubd81","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"VVVVVVXpfEA="},"xaxis":"x","y":{"dtype":"f8","bdata":"RlAvhT7LKUA="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\ub300\uc804\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\ub300\uc804"],"legendgroup":"\ub300\uc804","marker":{"color":"#1ABC9C","size":{"dtype":"f8","bdata":"AAAAAABAUEA="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\ub300\uc804","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"q6qqqqo+fEA="},"xaxis":"x","y":{"dtype":"f8","bdata":"PJg9TbuDJ0A="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\uc778\ucc9c\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\uc778\ucc9c"],"legendgroup":"\uc778\ucc9c","marker":{"color":"#F39C12","size":{"dtype":"f8","bdata":"AAAAAABgZEA="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\uc778\ucc9c","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"q6qqqqqafEA="},"xaxis":"x","y":{"dtype":"f8","bdata":"zSBCK3DXJkA="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\uc81c\uc8fc\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\uc81c\uc8fc"],"legendgroup":"\uc81c\uc8fc","marker":{"color":"#673AB7","size":{"dtype":"f8","bdata":"AAAAAABog0A="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\uc81c\uc8fc","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"AAAAAAAEeEA="},"xaxis":"x","y":{"dtype":"f8","bdata":"Hopbdt1TJ0A="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\uc804\ub0a8\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\uc804\ub0a8"],"legendgroup":"\uc804\ub0a8","marker":{"color":"#795548","size":{"dtype":"f8","bdata":"AAAAAACHt0A="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\uc804\ub0a8","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"q6qqqqqqfUA="},"xaxis":"x","y":{"dtype":"f8","bdata":"yo8fP378KkA="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\ub300\uad6c\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\ub300\uad6c"],"legendgroup":"\ub300\uad6c","marker":{"color":"#2ECC71","size":{"dtype":"f8","bdata":"AAAAAABAekA="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\ub300\uad6c","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"AAAAAAB8fEA="},"xaxis":"x","y":{"dtype":"f8","bdata":"rMmvJr8aKEA="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\uacbd\uae30\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\uacbd\uae30"],"legendgroup":"\uacbd\uae30","marker":{"color":"#34495E","size":{"dtype":"f8","bdata":"AAAAAABwn0A="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\uacbd\uae30","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"VVVVVVXBe0A="},"xaxis":"x","y":{"dtype":"f8","bdata":"9gXibptxJ0A="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\ubd80\uc0b0\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\ubd80\uc0b0"],"legendgroup":"\ubd80\uc0b0","marker":{"color":"#3498DB","size":{"dtype":"f8","bdata":"AAAAAAAwcUA="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\ubd80\uc0b0","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"VVVVVVUpfkA="},"xaxis":"x","y":{"dtype":"f8","bdata":"HSrKONDnJ0A="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\uc804\ubd81\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\uc804\ubd81"],"legendgroup":"\uc804\ubd81","marker":{"color":"#FF9800","size":{"dtype":"f8","bdata":"AAAAAADusUA="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\uc804\ubd81","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"AAAAAAC8ekA="},"xaxis":"x","y":{"dtype":"f8","bdata":"PYZYeMHAK0A="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\ucda9\ub0a8\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\ucda9\ub0a8"],"legendgroup":"\ucda9\ub0a8","marker":{"color":"#4CAF50","size":{"dtype":"f8","bdata":"AAAAAAB4rUA="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\ucda9\ub0a8","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"VVVVVVWle0A="},"xaxis":"x","y":{"dtype":"f8","bdata":"1OjWC40FKkA="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\ucda9\ubd81\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\ucda9\ubd81"],"legendgroup":"\ucda9\ubd81","marker":{"color":"#607D8B","size":{"dtype":"f8","bdata":"AAAAAAA0mUA="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\ucda9\ubd81","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"AAAAAAAwe0A="},"xaxis":"x","y":{"dtype":"f8","bdata":"G689\u002fBy8KEA="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003e\uc9c0\uc5ed=\uad11\uc8fc\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{x}\u003cbr\u003e\uc124\ube44\uc774\uc6a9\ub960(%)=%{y}\u003cbr\u003e\uc124\ube44\uc6a9\ub7c9=%{marker.size}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["\uad11\uc8fc"],"legendgroup":"\uad11\uc8fc","marker":{"color":"#9B59B6","size":{"dtype":"f8","bdata":"AAAAAAAQdkA="},"sizemode":"area","sizeref":1.6730555555555555,"symbol":"circle"},"mode":"markers","name":"\uad11\uc8fc","orientation":"v","showlegend":true,"x":{"dtype":"f8","bdata":"q6qqqqoyfEA="},"xaxis":"x","y":{"dtype":"f8","bdata":"lY2aEB5LJ0A="},"yaxis":"y","type":"scatter"}],                        {"template":{"data":{"barpolar":[{"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"type":"carpet"}],"choropleth":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"choropleth"}],"contourcarpet":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"contourcarpet"}],"contour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"contour"}],"heatmap":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"heatmap"}],"histogram2dcontour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2dcontour"}],"histogram2d":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2d"}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"mesh3d":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"mesh3d"}],"parcoords":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"parcoords"}],"pie":[{"automargin":true,"type":"pie"}],"scatter3d":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatter3d"}],"scattercarpet":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattercarpet"}],"scattergeo":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergeo"}],"scattergl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergl"}],"scattermapbox":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermapbox"}],"scattermap":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermap"}],"scatterpolargl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolargl"}],"scatterpolar":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolar"}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"scatterternary":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterternary"}],"surface":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"surface"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}]},"layout":{"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"autotypenumbers":"strict","coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]],"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]},"colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"geo":{"bgcolor":"white","lakecolor":"white","landcolor":"white","showlakes":true,"showland":true,"subunitcolor":"#C8D4E3"},"hoverlabel":{"align":"left"},"hovermode":"closest","mapbox":{"style":"light"},"paper_bgcolor":"white","plot_bgcolor":"white","polar":{"angularaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""},"bgcolor":"white","radialaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""}},"scene":{"xaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"yaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"zaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"ternary":{"aaxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"baxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"bgcolor":"white","caxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""}},"title":{"x":0.05},"xaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2},"yaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2}}},"xaxis":{"anchor":"y","domain":[0.0,1.0],"title":{"text":"\uc77c\uc0ac\ub7c9 (MJ\u002fm\u00b2)"},"range":[379.3333333333333,487.5]},"yaxis":{"anchor":"x","domain":[0.0,1.0],"title":{"text":"\uc124\ube44\uc774\uc6a9\ub960 (%)"},"range":[11.297992736218534,14.199260979895966]},"legend":{"title":{"text":"\uc9c0\uc5ed"},"tracegroupgap":0,"itemsizing":"constant"},"title":{"text":"2024\ub144 \uc9c0\uc5ed\ubcc4 \uc77c\uc0ac\ub7c9\uacfc \uc124\ube44\uc774\uc6a9\ub960 \ube44\uad50 \ubd84\uc11d"},"annotations":[{"arrowhead":2,"ax":15,"ay":-15,"bgcolor":"rgba(255,255,255,0.6)","font":{"color":"black","size":11},"showarrow":true,"text":"\uc11c\uc6b8","x":436.3333333333333,"y":13.0986301369863},{"font":{"color":"white","size":11},"showarrow":false,"text":"\u003cb\u003e\uac15\uc6d0\u003c\u002fb\u003e","x":408.0833333333333,"y":12.82723721966455},{"font":{"color":"white","size":11},"showarrow":false,"text":"\u003cb\u003e\uacbd\ub0a8\u003c\u002fb\u003e","x":465.8333333333333,"y":12.47899792527361},{"font":{"color":"white","size":11},"showarrow":false,"text":"\u003cb\u003e\uacbd\ubd81\u003c\u002fb\u003e","x":462.5833333333333,"y":12.89696136667784},{"arrowhead":2,"ax":15,"ay":-15,"bgcolor":"rgba(255,255,255,0.6)","font":{"color":"black","size":11},"showarrow":true,"text":"\ub300\uc804","x":451.9166666666667,"y":11.75728837372673},{"arrowhead":2,"ax":15,"ay":-15,"bgcolor":"rgba(255,255,255,0.6)","font":{"color":"black","size":11},"showarrow":true,"text":"\uc778\ucc9c","x":457.6666666666667,"y":11.42077765638569},{"font":{"color":"white","size":11},"showarrow":false,"text":"\u003cb\u003e\uc81c\uc8fc\u003c\u002fb\u003e","x":384.25,"y":11.66379899852205},{"font":{"color":"white","size":11},"showarrow":false,"text":"\u003cb\u003e\uc804\ub0a8\u003c\u002fb\u003e","x":474.6666666666667,"y":13.49315068493151},{"arrowhead":2,"ax":15,"ay":-15,"bgcolor":"rgba(255,255,255,0.6)","font":{"color":"black","size":11},"showarrow":true,"text":"\ub300\uad6c","x":455.75,"y":12.05223961730811},{"font":{"color":"white","size":11},"showarrow":false,"text":"\u003cb\u003e\uacbd\uae30\u003c\u002fb\u003e","x":444.0833333333333,"y":11.72188898572038},{"arrowhead":2,"ax":15,"ay":-15,"bgcolor":"rgba(255,255,255,0.6)","font":{"color":"black","size":11},"showarrow":true,"text":"\ubd80\uc0b0","x":482.5833333333333,"y":11.9527604815276},{"font":{"color":"white","size":11},"showarrow":false,"text":"\u003cb\u003e\uc804\ubd81\u003c\u002fb\u003e","x":427.75,"y":13.87647605972881},{"font":{"color":"white","size":11},"showarrow":false,"text":"\u003cb\u003e\ucda9\ub0a8\u003c\u002fb\u003e","x":442.3333333333333,"y":13.01084172247321},{"font":{"color":"white","size":11},"showarrow":false,"text":"\u003cb\u003e\ucda9\ubd81\u003c\u002fb\u003e","x":435.0,"y":12.36740864041308},{"arrowhead":2,"ax":15,"ay":-15,"bgcolor":"rgba(255,255,255,0.6)","font":{"color":"black","size":11},"showarrow":true,"text":"\uad11\uc8fc","x":451.1666666666667,"y":11.64671375166544},{"font":{"color":"green"},"showarrow":false,"text":"\uc131\uacfc \uc6b0\uc218 (\uc790\uc6d0\u2191, \ud6a8\uc728\u2191)","x":482.5833333333333,"xanchor":"right","y":13.87647605972881,"yanchor":"bottom"}],"autosize":true,"height":720,"shapes":[{"line":{"color":"red","dash":"dash","width":2},"type":"line","x0":445.33333333333326,"x1":445.33333333333326,"y0":11.42077765638569,"y1":13.87647605972881},{"line":{"color":"red","dash":"dash","width":2},"type":"line","x0":384.25,"x1":482.5833333333333,"y0":12.417678108066992,"y1":12.417678108066992}]},                        {"displaylogo": false, "responsive": true}                    )                };            </script>        </div>
+    </section>
+
+    <!-- 라인차트 그리드 (발전량/설비용량/일사량) -->
+    <section class="card charts-grid">
+        <div class="chart"><div>                            <div id="216f1565-53f4-46bf-b513-c83bb6419cd3" class="plotly-graph-div" style="height:420px; width:100%;"></div>            <script type="text/javascript">                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("216f1565-53f4-46bf-b513-c83bb6419cd3")) {                    Plotly.newPlot(                        "216f1565-53f4-46bf-b513-c83bb6419cd3",                        [{"line":{"color":"#d62728","width":3},"marker":{"size":9,"symbol":"circle"},"mode":"lines+markers","name":"\uacbd\ubd81","x":{"dtype":"i2","bdata":"5AflB+YH5wfoBw=="},"y":{"dtype":"i4","bdata":"LcUbAJ1FJgCVxjIAOQg6AG87QgA="},"type":"scatter"},{"line":{"color":"#1f77b4","width":3},"marker":{"size":9,"symbol":"circle"},"mode":"lines+markers","name":"\uacbd\ub0a8","x":{"dtype":"i2","bdata":"5AflB+YH5wfoBw=="},"y":{"dtype":"i4","bdata":"G5EQADWBFQCbdRsAFJodAKOgIQA="},"type":"scatter"},{"line":{"color":"#2ca02c","width":3},"marker":{"size":9,"symbol":"circle"},"mode":"lines+markers","name":"\ucda9\ub0a8","x":{"dtype":"i2","bdata":"5AflB+YH5wfoBw=="},"y":{"dtype":"i4","bdata":"MXohAA9eKgAiUjIAyi81AICZQQA="},"type":"scatter"}],                        {"template":{"data":{"barpolar":[{"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"type":"carpet"}],"choropleth":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"choropleth"}],"contourcarpet":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"contourcarpet"}],"contour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"contour"}],"heatmap":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"heatmap"}],"histogram2dcontour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2dcontour"}],"histogram2d":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2d"}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"mesh3d":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"mesh3d"}],"parcoords":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"parcoords"}],"pie":[{"automargin":true,"type":"pie"}],"scatter3d":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatter3d"}],"scattercarpet":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattercarpet"}],"scattergeo":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergeo"}],"scattergl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergl"}],"scattermapbox":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermapbox"}],"scattermap":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermap"}],"scatterpolargl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolargl"}],"scatterpolar":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolar"}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"scatterternary":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterternary"}],"surface":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"surface"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}]},"layout":{"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"autotypenumbers":"strict","coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]],"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]},"colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"geo":{"bgcolor":"white","lakecolor":"white","landcolor":"white","showlakes":true,"showland":true,"subunitcolor":"#C8D4E3"},"hoverlabel":{"align":"left"},"hovermode":"closest","mapbox":{"style":"light"},"paper_bgcolor":"white","plot_bgcolor":"white","polar":{"angularaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""},"bgcolor":"white","radialaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""}},"scene":{"xaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"yaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"zaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"ternary":{"aaxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"baxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"bgcolor":"white","caxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""}},"title":{"x":0.05},"xaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2},"yaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2}}},"xaxis":{"title":{"text":"\uc5f0\ub3c4"},"dtick":1,"showgrid":true,"gridcolor":"lightgray"},"yaxis":{"title":{"text":"\ubc1c\uc804\ub7c9(MWh)"},"showgrid":true,"gridcolor":"lightgray"},"legend":{"title":{"text":"\uc9c0\uc5ed"},"bgcolor":"rgba(255,255,255,0.7)","bordercolor":"lightgray","borderwidth":1},"title":{"text":"\uacbd\ubd81\u00b7\uacbd\ub0a8\u00b7\ucda9\ub0a8 \uc5f0\ub3c4\ubcc4 \ubc1c\uc804\ub7c9 \ucd94\uc774"},"height":420},                        {"displaylogo": false, "responsive": true}                    )                };            </script>        </div></div>
+        <div class="chart"><div>                            <div id="9d260da8-11a1-48f1-b409-af43fc588a61" class="plotly-graph-div" style="height:420px; width:100%;"></div>            <script type="text/javascript">                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("9d260da8-11a1-48f1-b409-af43fc588a61")) {                    Plotly.newPlot(                        "9d260da8-11a1-48f1-b409-af43fc588a61",                        [{"line":{"color":"#d62728","dash":"dot","width":3},"marker":{"size":8,"symbol":"square"},"mode":"lines+markers","name":"\uacbd\ubd81","x":{"dtype":"i2","bdata":"5AflB+YH5wfoBw=="},"y":{"dtype":"i2","bdata":"6wZpCUYL\u002fAwCDw=="},"type":"scatter"},{"line":{"color":"#1f77b4","dash":"dot","width":3},"marker":{"size":8,"symbol":"square"},"mode":"lines+markers","name":"\uacbd\ub0a8","x":{"dtype":"i2","bdata":"5AflB+YH5wfoBw=="},"y":{"dtype":"i2","bdata":"PQRDBRwG0QbgBw=="},"type":"scatter"},{"line":{"color":"#2ca02c","dash":"dot","width":3},"marker":{"size":8,"symbol":"square"},"mode":"lines+markers","name":"\ucda9\ub0a8","x":{"dtype":"i2","bdata":"5AflB+YH5wfoBw=="},"y":{"dtype":"i2","bdata":"9gfaCe4KAAy8Dg=="},"type":"scatter"}],                        {"template":{"data":{"barpolar":[{"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"type":"carpet"}],"choropleth":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"choropleth"}],"contourcarpet":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"contourcarpet"}],"contour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"contour"}],"heatmap":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"heatmap"}],"histogram2dcontour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2dcontour"}],"histogram2d":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2d"}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"mesh3d":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"mesh3d"}],"parcoords":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"parcoords"}],"pie":[{"automargin":true,"type":"pie"}],"scatter3d":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatter3d"}],"scattercarpet":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattercarpet"}],"scattergeo":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergeo"}],"scattergl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergl"}],"scattermapbox":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermapbox"}],"scattermap":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermap"}],"scatterpolargl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolargl"}],"scatterpolar":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolar"}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"scatterternary":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterternary"}],"surface":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"surface"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}]},"layout":{"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"autotypenumbers":"strict","coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]],"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]},"colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"geo":{"bgcolor":"white","lakecolor":"white","landcolor":"white","showlakes":true,"showland":true,"subunitcolor":"#C8D4E3"},"hoverlabel":{"align":"left"},"hovermode":"closest","mapbox":{"style":"light"},"paper_bgcolor":"white","plot_bgcolor":"white","polar":{"angularaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""},"bgcolor":"white","radialaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""}},"scene":{"xaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"yaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"zaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"ternary":{"aaxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"baxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"bgcolor":"white","caxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""}},"title":{"x":0.05},"xaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2},"yaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2}}},"xaxis":{"title":{"text":"\uc5f0\ub3c4"},"dtick":1,"showgrid":true,"gridcolor":"lightgray"},"yaxis":{"title":{"text":"\uc124\ube44\uc6a9\ub7c9(MW)"},"showgrid":true,"gridcolor":"lightgray"},"legend":{"title":{"text":"\uc9c0\uc5ed"},"bgcolor":"rgba(255,255,255,0.7)","bordercolor":"lightgray","borderwidth":1},"title":{"text":"\uacbd\ubd81\u00b7\uacbd\ub0a8\u00b7\ucda9\ub0a8 \uc5f0\ub3c4\ubcc4 \uc124\ube44\uc6a9\ub7c9 \ucd94\uc774"},"height":420},                        {"displaylogo": false, "responsive": true}                    )                };            </script>        </div></div>
+        <div class="chart span-2"><div>                            <div id="e6addaeb-c528-4b6e-b60c-67de92241f12" class="plotly-graph-div" style="height:420px; width:100%;"></div>            <script type="text/javascript">                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("e6addaeb-c528-4b6e-b60c-67de92241f12")) {                    Plotly.newPlot(                        "e6addaeb-c528-4b6e-b60c-67de92241f12",                        [{"hovertemplate":"\uc9c0\uc5ed=\uacbd\ub0a8\u003cbr\u003e\uc5f0\ub3c4=%{x}\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{y}\u003cextra\u003e\u003c\u002fextra\u003e","legendgroup":"\uacbd\ub0a8","line":{"color":"#1f77b4","dash":"solid","width":3},"marker":{"symbol":"circle","size":9},"mode":"lines+markers","name":"\uacbd\ub0a8","orientation":"v","showlegend":true,"x":{"dtype":"i2","bdata":"5AflB+YH5wfoBw=="},"xaxis":"x","y":{"dtype":"f8","bdata":"AAAAAACrtUAAAAAAANq1QAAAAAAAtLZAAAAAAABwtUAAAAAAANa1QA=="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\uc9c0\uc5ed=\uacbd\ubd81\u003cbr\u003e\uc5f0\ub3c4=%{x}\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{y}\u003cextra\u003e\u003c\u002fextra\u003e","legendgroup":"\uacbd\ubd81","line":{"color":"#d62728","dash":"solid","width":3},"marker":{"symbol":"circle","size":9},"mode":"lines+markers","name":"\uacbd\ubd81","orientation":"v","showlegend":true,"x":{"dtype":"i2","bdata":"5AflB+YH5wfoBw=="},"xaxis":"x","y":{"dtype":"f8","bdata":"AAAAAABwtUAAAAAAAPm0QAAAAAAAa7ZAAAAAAAAFtkAAAAAAAK+1QA=="},"yaxis":"y","type":"scatter"},{"hovertemplate":"\uc9c0\uc5ed=\ucda9\ub0a8\u003cbr\u003e\uc5f0\ub3c4=%{x}\u003cbr\u003e\uc77c\uc0ac\ub7c9(MJ\u002fm2)=%{y}\u003cextra\u003e\u003c\u002fextra\u003e","legendgroup":"\ucda9\ub0a8","line":{"color":"#2ca02c","dash":"solid","width":3},"marker":{"symbol":"circle","size":9},"mode":"lines+markers","name":"\ucda9\ub0a8","orientation":"v","showlegend":true,"x":{"dtype":"i2","bdata":"5AflB+YH5wfoBw=="},"xaxis":"x","y":{"dtype":"f8","bdata":"AAAAAAAstEAAAAAAACi0QAAAAAAAEbVAAAAAAAAmtEAAAAAAALy0QA=="},"yaxis":"y","type":"scatter"}],                        {"template":{"data":{"barpolar":[{"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"#C8D4E3","linecolor":"#C8D4E3","minorgridcolor":"#C8D4E3","startlinecolor":"#2a3f5f"},"type":"carpet"}],"choropleth":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"choropleth"}],"contourcarpet":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"contourcarpet"}],"contour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"contour"}],"heatmap":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"heatmap"}],"histogram2dcontour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2dcontour"}],"histogram2d":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2d"}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"mesh3d":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"mesh3d"}],"parcoords":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"parcoords"}],"pie":[{"automargin":true,"type":"pie"}],"scatter3d":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatter3d"}],"scattercarpet":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattercarpet"}],"scattergeo":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergeo"}],"scattergl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergl"}],"scattermapbox":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermapbox"}],"scattermap":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermap"}],"scatterpolargl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolargl"}],"scatterpolar":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolar"}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"scatterternary":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterternary"}],"surface":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"surface"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}]},"layout":{"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"autotypenumbers":"strict","coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]],"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]},"colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"geo":{"bgcolor":"white","lakecolor":"white","landcolor":"white","showlakes":true,"showland":true,"subunitcolor":"#C8D4E3"},"hoverlabel":{"align":"left"},"hovermode":"closest","mapbox":{"style":"light"},"paper_bgcolor":"white","plot_bgcolor":"white","polar":{"angularaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""},"bgcolor":"white","radialaxis":{"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":""}},"scene":{"xaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"yaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"},"zaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#EBF0F8","showbackground":true,"ticks":"","zerolinecolor":"#EBF0F8"}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"ternary":{"aaxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"baxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"bgcolor":"white","caxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""}},"title":{"x":0.05},"xaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2},"yaxis":{"automargin":true,"gridcolor":"#EBF0F8","linecolor":"#EBF0F8","ticks":"","title":{"standoff":15},"zerolinecolor":"#EBF0F8","zerolinewidth":2}}},"xaxis":{"anchor":"y","domain":[0.0,1.0],"title":{"text":"\uc5f0\ub3c4"},"dtick":1,"showgrid":true,"gridcolor":"lightgray"},"yaxis":{"anchor":"x","domain":[0.0,1.0],"title":{"text":"\uc77c\uc0ac\ub7c9 (MJ\u002fm\u00b2)"},"showgrid":true,"gridcolor":"lightgray"},"legend":{"title":{"text":"\uc9c0\uc5ed"},"tracegroupgap":0,"bgcolor":"rgba(255,255,255,0.7)","bordercolor":"lightgray","borderwidth":1},"title":{"text":"\uacbd\ubd81\u00b7\uacbd\ub0a8\u00b7\ucda9\ub0a8 \uc5f0\ub3c4\ubcc4 \uc77c\uc0ac\ub7c9 \ucd94\uc774"},"height":420},                        {"displaylogo": false, "responsive": true}                    )                };            </script>        </div></div>
+    </section>
+
+    <!-- 태양광 발전소 현황: 지도 -->
+    <div id="plants" class="anchor"></div>
+    <div class="header" style="margin-top:24px">
+        <span class="badge">태양광 발전소 현황</span>
+        <h1>경북, 경남, 충남 설비 현황 및 후보지 추천</h1>
+        <p>기존 설비 현황 및 추천 지역 확인</p>
+    </div>
+    <section class="card map-card">
+        <div class="map-wrapper"><!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    
+        <script>
+            L_NO_TOUCH = false;
+            L_DISABLE_3D = false;
+        </script>
+    
+    <style>html, body {width: 100%;height: 100%;margin: 0;padding: 0;}</style>
+    <style>#map {position:absolute;top:0;bottom:0;right:0;left:0;}</style>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_c34983236d6c819e185dea0a5e90a0b1 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+        
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.fullscreen/1.4.2/Control.FullScreen.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.fullscreen/1.4.2/Control.FullScreen.min.css"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.1.0/leaflet.markercluster.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.1.0/MarkerCluster.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.1.0/MarkerCluster.Default.css"/>
+    <script src="https://cdn.jsdelivr.net/gh/python-visualization/folium@main/folium/templates/leaflet_heat.min.js"></script>
+</head>
+<body>
+    
+    
+            <div class="folium-map" id="map_c34983236d6c819e185dea0a5e90a0b1" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_c34983236d6c819e185dea0a5e90a0b1 = L.map(
+                "map_c34983236d6c819e185dea0a5e90a0b1",
+                {
+                    center: [36.4, 128.0],
+                    crs: L.CRS.EPSG3857,
+                    zoom: 7,
+                    zoomControl: true,
+                    preferCanvas: false,
+                }
+            );
+            L.control.scale().addTo(map_c34983236d6c819e185dea0a5e90a0b1);
+
+            
+
+        
+    
+            var tile_layer_b291bbd31d616fbe5600256850f59452 = L.tileLayer(
+                "https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
+                {"attribution": "\u0026copy; \u003ca target=\"_blank\" href=\"http://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors \u0026copy; \u003ca target=\"_blank\" href=\"http://cartodb.com/attributions\"\u003eCartoDB\u003c/a\u003e, CartoDB \u003ca target=\"_blank\" href =\"http://cartodb.com/attributions\"\u003eattributions\u003c/a\u003e", "detectRetina": false, "maxNativeZoom": 18, "maxZoom": 18, "minZoom": 0, "noWrap": false, "opacity": 1, "subdomains": "abc", "tms": false}
+            ).addTo(map_c34983236d6c819e185dea0a5e90a0b1);
+        
+    
+            L.control.fullscreen(
+                {"forceSeparateButton": false, "position": "topleft", "title": "Full Screen", "titleCancel": "Exit Full Screen"}
+            ).addTo(map_c34983236d6c819e185dea0a5e90a0b1);
+        
+    
+            var feature_group_fa9086519a9446cebdfe60cc25ed0d1a = L.featureGroup(
+                {}
+            ).addTo(map_c34983236d6c819e185dea0a5e90a0b1);
+        
+    
+            var marker_cb03fb90dc3eef3353b4673a9e2b2159 = L.marker(
+                [36.1839054, 127.1446669],
+                {}
+            ).addTo(feature_group_fa9086519a9446cebdfe60cc25ed0d1a);
+        
+    
+            var div_icon_5ea696e8d92d14d6f86e38a16b1c22a0 = L.divIcon({"className": "empty", "html": "\n    \u003cdiv style=\"width:56px;height:56px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n        \u003ci class=\"fa-solid fa-sun\"\n            style=\"font-size:44px;line-height:1;color:#ffe28dff;\n                    filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n    \u003c/div\u003e\n    ", "iconAnchor": [28, 28], "iconSize": [56, 56]});
+            marker_cb03fb90dc3eef3353b4673a9e2b2159.setIcon(div_icon_5ea696e8d92d14d6f86e38a16b1c22a0);
+        
+    
+            marker_cb03fb90dc3eef3353b4673a9e2b2159.bindTooltip(
+                `<div>
+                     충남 논산시
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_df7303df6e0a3cb03893fac990d56ffc = L.marker(
+                [36.6917263, 126.8141959],
+                {}
+            ).addTo(feature_group_fa9086519a9446cebdfe60cc25ed0d1a);
+        
+    
+            var div_icon_e46c814d1f340e5f8c85d49e9646293d = L.divIcon({"className": "empty", "html": "\n    \u003cdiv style=\"width:56px;height:56px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n        \u003ci class=\"fa-solid fa-sun\"\n            style=\"font-size:44px;line-height:1;color:#fff7bcff;\n                    filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n    \u003c/div\u003e\n    ", "iconAnchor": [28, 28], "iconSize": [56, 56]});
+            marker_df7303df6e0a3cb03893fac990d56ffc.setIcon(div_icon_e46c814d1f340e5f8c85d49e9646293d);
+        
+    
+            marker_df7303df6e0a3cb03893fac990d56ffc.bindTooltip(
+                `<div>
+                     충남 예산군
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_916c8bbe506e444be04109a69bc8c117 = L.marker(
+                [36.0065257, 129.3890059],
+                {}
+            ).addTo(feature_group_fa9086519a9446cebdfe60cc25ed0d1a);
+        
+    
+            var div_icon_d89ac647d77481b8e0843998e812a374 = L.divIcon({"className": "empty", "html": "\n    \u003cdiv style=\"width:56px;height:56px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n        \u003ci class=\"fa-solid fa-sun\"\n            style=\"font-size:44px;line-height:1;color:#d95f0eff;\n                    filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n    \u003c/div\u003e\n    ", "iconAnchor": [28, 28], "iconSize": [56, 56]});
+            marker_916c8bbe506e444be04109a69bc8c117.setIcon(div_icon_d89ac647d77481b8e0843998e812a374);
+        
+    
+            marker_916c8bbe506e444be04109a69bc8c117.bindTooltip(
+                `<div>
+                     경북 포항시 남구
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_81c334fbffaa6060f876d43fdd33633d = L.marker(
+                [36.2117565, 128.3457108],
+                {}
+            ).addTo(feature_group_fa9086519a9446cebdfe60cc25ed0d1a);
+        
+    
+            var div_icon_bf5a3a843564ae731ca4c960fee8292d = L.divIcon({"className": "empty", "html": "\n    \u003cdiv style=\"width:56px;height:56px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n        \u003ci class=\"fa-solid fa-sun\"\n            style=\"font-size:44px;line-height:1;color:#f99125ff;\n                    filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n    \u003c/div\u003e\n    ", "iconAnchor": [28, 28], "iconSize": [56, 56]});
+            marker_81c334fbffaa6060f876d43fdd33633d.setIcon(div_icon_bf5a3a843564ae731ca4c960fee8292d);
+        
+    
+            marker_81c334fbffaa6060f876d43fdd33633d.bindTooltip(
+                `<div>
+                     경북 구미시
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_d87e38f1d4542381865464d8fee713ae = L.marker(
+                [35.4654473, 128.473787],
+                {}
+            ).addTo(feature_group_fa9086519a9446cebdfe60cc25ed0d1a);
+        
+    
+            var div_icon_8ffd7bc678b32534203fef35373d2801 = L.divIcon({"className": "empty", "html": "\n    \u003cdiv style=\"width:56px;height:56px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n        \u003ci class=\"fa-solid fa-sun\"\n            style=\"font-size:44px;line-height:1;color:#fea534ff;\n                    filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n    \u003c/div\u003e\n    ", "iconAnchor": [28, 28], "iconSize": [56, 56]});
+            marker_d87e38f1d4542381865464d8fee713ae.setIcon(div_icon_8ffd7bc678b32534203fef35373d2801);
+        
+    
+            marker_d87e38f1d4542381865464d8fee713ae.bindTooltip(
+                `<div>
+                     경남 창녕군
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_a205107549241e164dd8f02913ec757c = L.marker(
+                [35.2495439, 128.8422028],
+                {}
+            ).addTo(feature_group_fa9086519a9446cebdfe60cc25ed0d1a);
+        
+    
+            var div_icon_c3fb8f4ff45ad9c7a7ce169d79d7d4a3 = L.divIcon({"className": "empty", "html": "\n    \u003cdiv style=\"width:56px;height:56px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n        \u003ci class=\"fa-solid fa-sun\"\n            style=\"font-size:44px;line-height:1;color:#e97819ff;\n                    filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n    \u003c/div\u003e\n    ", "iconAnchor": [28, 28], "iconSize": [56, 56]});
+            marker_a205107549241e164dd8f02913ec757c.setIcon(div_icon_c3fb8f4ff45ad9c7a7ce169d79d7d4a3);
+        
+    
+            marker_a205107549241e164dd8f02913ec757c.bindTooltip(
+                `<div>
+                     경남 김해시
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+    var color_map_1c44ec009c6e8f1bad707efba4a04053 = {};
+
+    
+    color_map_1c44ec009c6e8f1bad707efba4a04053.color = d3.scale.threshold()
+              .domain([4650.0, 4650.701402805611, 4651.402805611222, 4652.104208416834, 4652.805611222445, 4653.507014028056, 4654.208416833667, 4654.909819639279, 4655.61122244489, 4656.312625250501, 4657.014028056112, 4657.715430861724, 4658.416833667335, 4659.118236472946, 4659.819639278557, 4660.521042084169, 4661.22244488978, 4661.923847695391, 4662.625250501002, 4663.3266533066135, 4664.0280561122245, 4664.7294589178355, 4665.4308617234465, 4666.132264529058, 4666.833667334669, 4667.53507014028, 4668.236472945891, 4668.937875751503, 4669.639278557114, 4670.340681362725, 4671.042084168336, 4671.743486973948, 4672.444889779559, 4673.14629258517, 4673.847695390781, 4674.549098196393, 4675.250501002004, 4675.951903807615, 4676.653306613226, 4677.354709418838, 4678.056112224449, 4678.75751503006, 4679.458917835671, 4680.160320641283, 4680.861723446894, 4681.563126252505, 4682.264529058116, 4682.965931863728, 4683.667334669339, 4684.36873747495, 4685.070140280561, 4685.771543086173, 4686.472945891784, 4687.174348697395, 4687.875751503006, 4688.5771543086175, 4689.2785571142285, 4689.9799599198395, 4690.6813627254505, 4691.382765531062, 4692.084168336673, 4692.785571142284, 4693.486973947895, 4694.188376753507, 4694.889779559118, 4695.591182364729, 4696.29258517034, 4696.993987975952, 4697.695390781563, 4698.396793587174, 4699.098196392785, 4699.799599198397, 4700.501002004008, 4701.202404809619, 4701.90380761523, 4702.605210420842, 4703.306613226453, 4704.008016032064, 4704.709418837675, 4705.410821643287, 4706.112224448898, 4706.813627254509, 4707.51503006012, 4708.216432865732, 4708.917835671343, 4709.619238476954, 4710.320641282565, 4711.022044088177, 4711.723446893788, 4712.424849699399, 4713.12625250501, 4713.827655310622, 4714.529058116233, 4715.230460921844, 4715.931863727455, 4716.6332665330665, 4717.3346693386775, 4718.0360721442885, 4718.7374749498995, 4719.438877755511, 4720.140280561122, 4720.841683366733, 4721.543086172344, 4722.244488977956, 4722.945891783567, 4723.647294589178, 4724.348697394789, 4725.050100200401, 4725.751503006012, 4726.452905811623, 4727.154308617234, 4727.855711422846, 4728.557114228457, 4729.258517034068, 4729.959919839679, 4730.661322645291, 4731.362725450902, 4732.064128256513, 4732.765531062124, 4733.466933867736, 4734.168336673347, 4734.869739478958, 4735.571142284569, 4736.272545090181, 4736.973947895792, 4737.675350701403, 4738.376753507014, 4739.078156312626, 4739.779559118237, 4740.480961923848, 4741.182364729459, 4741.883767535071, 4742.5851703406815, 4743.2865731462925, 4743.9879759519035, 4744.689378757515, 4745.390781563126, 4746.092184368737, 4746.793587174348, 4747.49498997996, 4748.196392785571, 4748.897795591182, 4749.599198396793, 4750.300601202405, 4751.002004008016, 4751.703406813627, 4752.404809619238, 4753.10621242485, 4753.807615230461, 4754.509018036072, 4755.210420841683, 4755.911823647295, 4756.613226452906, 4757.314629258517, 4758.016032064128, 4758.71743486974, 4759.418837675351, 4760.120240480962, 4760.821643286573, 4761.523046092185, 4762.224448897796, 4762.925851703407, 4763.627254509018, 4764.328657314629, 4765.030060120241, 4765.731462925852, 4766.432865731463, 4767.134268537075, 4767.835671342686, 4768.537074148297, 4769.238476953908, 4769.939879759519, 4770.6412825651305, 4771.3426853707415, 4772.0440881763525, 4772.7454909819635, 4773.446893787575, 4774.148296593186, 4774.849699398797, 4775.551102204408, 4776.25250501002, 4776.953907815631, 4777.655310621242, 4778.356713426853, 4779.058116232465, 4779.759519038076, 4780.460921843687, 4781.162324649298, 4781.86372745491, 4782.565130260521, 4783.266533066132, 4783.967935871743, 4784.669338677355, 4785.370741482966, 4786.072144288577, 4786.773547094188, 4787.4749498998, 4788.176352705411, 4788.877755511022, 4789.579158316633, 4790.280561122245, 4790.981963927856, 4791.683366733467, 4792.384769539078, 4793.08617234469, 4793.787575150301, 4794.488977955912, 4795.190380761523, 4795.891783567135, 4796.593186372746, 4797.294589178357, 4797.9959919839675, 4798.697394789579, 4799.39879759519, 4800.100200400801, 4800.801603206412, 4801.503006012024, 4802.204408817635, 4802.905811623246, 4803.607214428857, 4804.308617234469, 4805.01002004008, 4805.711422845691, 4806.412825651302, 4807.114228456914, 4807.815631262525, 4808.517034068136, 4809.218436873747, 4809.919839679359, 4810.62124248497, 4811.322645290581, 4812.024048096192, 4812.725450901804, 4813.426853707415, 4814.128256513026, 4814.829659318637, 4815.531062124249, 4816.23246492986, 4816.933867735471, 4817.635270541082, 4818.336673346694, 4819.038076152305, 4819.739478957916, 4820.440881763527, 4821.142284569139, 4821.84368737475, 4822.545090180361, 4823.246492985972, 4823.9478957915835, 4824.6492985971945, 4825.3507014028055, 4826.0521042084165, 4826.753507014028, 4827.454909819639, 4828.15631262525, 4828.857715430861, 4829.559118236473, 4830.260521042084, 4830.961923847695, 4831.663326653306, 4832.364729458918, 4833.066132264529, 4833.76753507014, 4834.468937875751, 4835.170340681363, 4835.871743486974, 4836.573146292585, 4837.274549098196, 4837.975951903808, 4838.677354709419, 4839.37875751503, 4840.080160320641, 4840.781563126253, 4841.482965931864, 4842.184368737475, 4842.885771543086, 4843.587174348698, 4844.288577154309, 4844.98997995992, 4845.691382765531, 4846.392785571143, 4847.094188376754, 4847.795591182365, 4848.496993987976, 4849.198396793588, 4849.899799599199, 4850.60120240481, 4851.302605210421, 4852.0040080160325, 4852.705410821643, 4853.406813627254, 4854.108216432865, 4854.809619238477, 4855.511022044088, 4856.212424849699, 4856.91382765531, 4857.615230460922, 4858.316633266533, 4859.018036072144, 4859.719438877755, 4860.420841683367, 4861.122244488978, 4861.823647294589, 4862.5250501002, 4863.226452905812, 4863.927855711423, 4864.629258517034, 4865.330661322645, 4866.032064128257, 4866.733466933868, 4867.434869739479, 4868.13627254509, 4868.837675350702, 4869.539078156313, 4870.240480961924, 4870.941883767535, 4871.643286573147, 4872.344689378758, 4873.046092184369, 4873.74749498998, 4874.448897795592, 4875.150300601203, 4875.851703406814, 4876.553106212425, 4877.254509018036, 4877.9559118236475, 4878.6573146292585, 4879.3587174348695, 4880.060120240481, 4880.761523046092, 4881.462925851703, 4882.164328657314, 4882.865731462925, 4883.567134268537, 4884.268537074148, 4884.969939879759, 4885.671342685371, 4886.372745490982, 4887.074148296593, 4887.775551102204, 4888.476953907815, 4889.178356713427, 4889.879759519038, 4890.581162324649, 4891.28256513026, 4891.983967935872, 4892.685370741483, 4893.386773547094, 4894.088176352705, 4894.789579158317, 4895.490981963928, 4896.192384769539, 4896.89378757515, 4897.595190380762, 4898.296593186373, 4898.997995991984, 4899.699398797595, 4900.400801603207, 4901.102204408818, 4901.803607214429, 4902.50501002004, 4903.206412825652, 4903.907815631263, 4904.609218436874, 4905.310621242485, 4906.0120240480965, 4906.7134268537075, 4907.4148296593185, 4908.116232464929, 4908.817635270541, 4909.519038076152, 4910.220440881763, 4910.921843687374, 4911.623246492986, 4912.324649298597, 4913.026052104208, 4913.727454909819, 4914.428857715431, 4915.130260521042, 4915.831663326653, 4916.533066132264, 4917.234468937876, 4917.935871743487, 4918.637274549098, 4919.338677354709, 4920.040080160321, 4920.741482965932, 4921.442885771543, 4922.144288577154, 4922.845691382766, 4923.547094188377, 4924.248496993988, 4924.949899799599, 4925.651302605211, 4926.352705410822, 4927.054108216433, 4927.755511022044, 4928.456913827656, 4929.158316633267, 4929.859719438878, 4930.561122244489, 4931.2625250501005, 4931.9639278557115, 4932.6653306613225, 4933.3667334669335, 4934.068136272545, 4934.769539078156, 4935.470941883767, 4936.172344689378, 4936.87374749499, 4937.575150300601, 4938.276553106212, 4938.977955911823, 4939.679358717435, 4940.380761523046, 4941.082164328657, 4941.783567134268, 4942.48496993988, 4943.186372745491, 4943.887775551102, 4944.589178356713, 4945.290581162325, 4945.991983967936, 4946.693386773547, 4947.394789579158, 4948.09619238477, 4948.797595190381, 4949.498997995992, 4950.200400801603, 4950.901803607215, 4951.603206412826, 4952.304609218437, 4953.006012024048, 4953.70741482966, 4954.408817635271, 4955.110220440882, 4955.811623246493, 4956.513026052105, 4957.214428857716, 4957.915831663327, 4958.617234468938, 4959.3186372745495, 4960.0200400801605, 4960.7214428857715, 4961.4228456913825, 4962.124248496994, 4962.825651302605, 4963.527054108216, 4964.228456913827, 4964.929859719439, 4965.63126252505, 4966.332665330661, 4967.034068136272, 4967.735470941884, 4968.436873747495, 4969.138276553106, 4969.839679358717, 4970.541082164329, 4971.24248496994, 4971.943887775551, 4972.645290581162, 4973.346693386774, 4974.048096192385, 4974.749498997996, 4975.450901803607, 4976.152304609219, 4976.85370741483, 4977.555110220441, 4978.256513026052, 4978.957915831664, 4979.659318637275, 4980.360721442886, 4981.062124248497, 4981.763527054109, 4982.46492985972, 4983.166332665331, 4983.867735470942, 4984.5691382765535, 4985.2705410821645, 4985.9719438877755, 4986.6733466933865, 4987.374749498998, 4988.076152304609, 4988.77755511022, 4989.478957915831, 4990.180360721442, 4990.881763527054, 4991.583166332665, 4992.284569138276, 4992.985971943888, 4993.687374749499, 4994.38877755511, 4995.090180360721, 4995.791583166332, 4996.492985971944, 4997.194388777555, 4997.895791583166, 4998.597194388778, 4999.298597194389, 5000.0])
+              .range(['#fff7bcff', '#fff7bcff', '#fff7bbff', '#fff7baff', '#fff6baff', '#fff6b9ff', '#fff6b8ff', '#fff5b8ff', '#fff5b7ff', '#fff5b6ff', '#fff4b6ff', '#fff4b5ff', '#fff4b4ff', '#fff3b4ff', '#fff3b3ff', '#fff3b2ff', '#fff3b2ff', '#fff2b1ff', '#fff2b0ff', '#fff2b0ff', '#fff1afff', '#fff1aeff', '#fff1aeff', '#fff0adff', '#fff0acff', '#fff0acff', '#ffefabff', '#ffefaaff', '#ffefaaff', '#ffefa9ff', '#ffeea9ff', '#ffeea8ff', '#ffeea7ff', '#ffeda7ff', '#ffeda6ff', '#ffeda5ff', '#ffeca5ff', '#ffeca4ff', '#ffeca3ff', '#ffeba3ff', '#ffeba2ff', '#ffeba1ff', '#ffeba1ff', '#ffeaa0ff', '#ffea9fff', '#ffea9fff', '#ffe99eff', '#ffe99dff', '#ffe99dff', '#ffe89cff', '#ffe89bff', '#ffe89bff', '#ffe79aff', '#ffe799ff', '#ffe799ff', '#ffe798ff', '#ffe697ff', '#ffe697ff', '#ffe696ff', '#ffe595ff', '#ffe595ff', '#ffe594ff', '#ffe493ff', '#ffe493ff', '#ffe492ff', '#ffe391ff', '#ffe391ff', '#ffe390ff', '#ffe390ff', '#ffe28fff', '#ffe28eff', '#ffe28eff', '#ffe18dff', '#ffe18cff', '#ffe18cff', '#ffe08bff', '#ffe08aff', '#ffe08aff', '#ffdf89ff', '#ffdf88ff', '#ffdf88ff', '#ffdf87ff', '#ffde86ff', '#ffde86ff', '#ffde85ff', '#ffdd84ff', '#ffdd84ff', '#ffdd83ff', '#ffdc82ff', '#ffdc82ff', '#ffdc81ff', '#ffdb80ff', '#ffdb80ff', '#ffdb7fff', '#ffdb7eff', '#ffda7eff', '#ffda7dff', '#ffda7cff', '#ffd97cff', '#ffd97bff', '#ffd97aff', '#ffd87aff', '#ffd879ff', '#ffd878ff', '#ffd778ff', '#ffd777ff', '#ffd777ff', '#ffd776ff', '#ffd675ff', '#ffd675ff', '#ffd674ff', '#ffd573ff', '#ffd573ff', '#ffd572ff', '#ffd471ff', '#ffd471ff', '#ffd470ff', '#ffd36fff', '#ffd36fff', '#ffd36eff', '#ffd36dff', '#ffd26dff', '#ffd26cff', '#ffd26bff', '#ffd16bff', '#ffd16aff', '#ffd169ff', '#ffd069ff', '#ffd068ff', '#ffd067ff', '#ffcf67ff', '#ffcf66ff', '#ffcf65ff', '#ffcf65ff', '#ffce64ff', '#ffce63ff', '#ffce63ff', '#ffcd62ff', '#ffcd61ff', '#ffcd61ff', '#ffcc60ff', '#ffcc5fff', '#ffcc5fff', '#ffcb5eff', '#ffcb5eff', '#ffcb5dff', '#ffcb5cff', '#ffca5cff', '#ffca5bff', '#ffca5aff', '#ffc95aff', '#ffc959ff', '#ffc958ff', '#ffc858ff', '#ffc857ff', '#ffc856ff', '#ffc756ff', '#ffc755ff', '#ffc754ff', '#ffc754ff', '#ffc653ff', '#ffc652ff', '#ffc652ff', '#ffc551ff', '#ffc550ff', '#ffc550ff', '#fec44fff', '#fec44fff', '#fec44eff', '#fec44eff', '#fec34eff', '#fec34eff', '#fec34eff', '#fec34dff', '#fec24dff', '#fec24dff', '#fec24dff', '#fec24cff', '#fec14cff', '#fec14cff', '#fec14cff', '#fec04bff', '#fec04bff', '#fec04bff', '#fec04bff', '#febf4bff', '#febf4aff', '#febf4aff', '#febf4aff', '#febe4aff', '#febe49ff', '#febe49ff', '#febe49ff', '#febd49ff', '#febd48ff', '#febd48ff', '#febd48ff', '#febc48ff', '#febc48ff', '#febc47ff', '#febc47ff', '#febb47ff', '#febb47ff', '#febb46ff', '#feba46ff', '#feba46ff', '#feba46ff', '#feba45ff', '#feb945ff', '#feb945ff', '#feb945ff', '#feb945ff', '#feb844ff', '#feb844ff', '#feb844ff', '#feb844ff', '#feb743ff', '#feb743ff', '#feb743ff', '#feb743ff', '#feb643ff', '#feb642ff', '#feb642ff', '#feb642ff', '#feb542ff', '#feb541ff', '#feb541ff', '#feb541ff', '#feb441ff', '#feb440ff', '#feb440ff', '#feb340ff', '#feb340ff', '#feb340ff', '#feb33fff', '#feb23fff', '#feb23fff', '#feb23fff', '#feb23eff', '#feb13eff', '#feb13eff', '#feb13eff', '#feb13dff', '#feb03dff', '#feb03dff', '#feb03dff', '#feb03dff', '#feaf3cff', '#feaf3cff', '#feaf3cff', '#feaf3cff', '#feae3bff', '#feae3bff', '#feae3bff', '#feae3bff', '#fead3aff', '#fead3aff', '#fead3aff', '#feac3aff', '#feac3aff', '#feac39ff', '#feac39ff', '#feab39ff', '#feab39ff', '#feab38ff', '#feab38ff', '#feaa38ff', '#feaa38ff', '#feaa37ff', '#feaa37ff', '#fea937ff', '#fea937ff', '#fea937ff', '#fea936ff', '#fea836ff', '#fea836ff', '#fea836ff', '#fea835ff', '#fea735ff', '#fea735ff', '#fea735ff', '#fea735ff', '#fea634ff', '#fea634ff', '#fea634ff', '#fea534ff', '#fea533ff', '#fea533ff', '#fea533ff', '#fea433ff', '#fea432ff', '#fea432ff', '#fea432ff', '#fea332ff', '#fea332ff', '#fea331ff', '#fea331ff', '#fea231ff', '#fea231ff', '#fea230ff', '#fea230ff', '#fea130ff', '#fea130ff', '#fea12fff', '#fea12fff', '#fea02fff', '#fea02fff', '#fea02fff', '#fea02eff', '#fe9f2eff', '#fe9f2eff', '#fe9f2eff', '#fe9e2dff', '#fe9e2dff', '#fe9e2dff', '#fe9e2dff', '#fe9d2cff', '#fe9d2cff', '#fe9d2cff', '#fe9d2cff', '#fe9c2cff', '#fe9c2bff', '#fe9c2bff', '#fe9c2bff', '#fe9b2bff', '#fe9b2aff', '#fe9b2aff', '#fe9b2aff', '#fe9a2aff', '#fe9a2aff', '#fe9a29ff', '#fe9a29ff', '#fe9929ff', '#fe9929ff', '#fe9928ff', '#fe9828ff', '#fe9828ff', '#fe9828ff', '#fd9728ff', '#fd9728ff', '#fd9727ff', '#fd9627ff', '#fc9627ff', '#fc9527ff', '#fc9527ff', '#fc9527ff', '#fc9426ff', '#fb9426ff', '#fb9426ff', '#fb9326ff', '#fb9326ff', '#fa9326ff', '#fa9226ff', '#fa9225ff', '#fa9225ff', '#fa9125ff', '#f99125ff', '#f99125ff', '#f99025ff', '#f99024ff', '#f89024ff', '#f88f24ff', '#f88f24ff', '#f88e24ff', '#f78e24ff', '#f78e23ff', '#f78d23ff', '#f78d23ff', '#f78d23ff', '#f68c23ff', '#f68c23ff', '#f68c22ff', '#f68b22ff', '#f58b22ff', '#f58b22ff', '#f58a22ff', '#f58a22ff', '#f58a21ff', '#f48921ff', '#f48921ff', '#f48921ff', '#f48821ff', '#f38821ff', '#f38720ff', '#f38720ff', '#f38720ff', '#f38620ff', '#f28620ff', '#f28620ff', '#f2851fff', '#f2851fff', '#f1851fff', '#f1841fff', '#f1841fff', '#f1841fff', '#f1831fff', '#f0831eff', '#f0831eff', '#f0821eff', '#f0821eff', '#ef821eff', '#ef811eff', '#ef811dff', '#ef801dff', '#ef801dff', '#ee801dff', '#ee7f1dff', '#ee7f1dff', '#ee7f1cff', '#ed7e1cff', '#ed7e1cff', '#ed7e1cff', '#ed7d1cff', '#ed7d1cff', '#ec7d1bff', '#ec7c1bff', '#ec7c1bff', '#ec7c1bff', '#eb7b1bff', '#eb7b1bff', '#eb7b1aff', '#eb7a1aff', '#eb7a1aff', '#ea791aff', '#ea791aff', '#ea791aff', '#ea7819ff', '#e97819ff', '#e97819ff', '#e97719ff', '#e97719ff', '#e97719ff', '#e87618ff', '#e87618ff', '#e87618ff', '#e87518ff', '#e77518ff', '#e77518ff', '#e77417ff', '#e77417ff', '#e77417ff', '#e67317ff', '#e67317ff', '#e67217ff', '#e67217ff', '#e57216ff', '#e57116ff', '#e57116ff', '#e57116ff', '#e57016ff', '#e47016ff', '#e47015ff', '#e46f15ff', '#e46f15ff', '#e36f15ff', '#e36e15ff', '#e36e15ff', '#e36e14ff', '#e36d14ff', '#e26d14ff', '#e26d14ff', '#e26c14ff', '#e26c14ff', '#e16b13ff', '#e16b13ff', '#e16b13ff', '#e16a13ff', '#e06a13ff', '#e06a13ff', '#e06912ff', '#e06912ff', '#e06912ff', '#df6812ff', '#df6812ff', '#df6812ff', '#df6711ff', '#de6711ff', '#de6711ff', '#de6611ff', '#de6611ff', '#de6611ff', '#dd6510ff', '#dd6510ff', '#dd6410ff', '#dd6410ff', '#dc6410ff', '#dc6310ff', '#dc6310ff', '#dc630fff', '#dc620fff', '#db620fff', '#db620fff', '#db610fff', '#db610fff', '#da610eff', '#da600eff', '#da600eff', '#da600eff', '#da5f0eff', '#d95f0eff']);
+    
+
+    color_map_1c44ec009c6e8f1bad707efba4a04053.x = d3.scale.linear()
+              .domain([4650.0, 5000.0])
+              .range([0, 450 - 50]);
+
+    color_map_1c44ec009c6e8f1bad707efba4a04053.legend = L.control({position: 'topright'});
+    color_map_1c44ec009c6e8f1bad707efba4a04053.legend.onAdd = function (map) {var div = L.DomUtil.create('div', 'legend'); return div};
+    color_map_1c44ec009c6e8f1bad707efba4a04053.legend.addTo(map_c34983236d6c819e185dea0a5e90a0b1);
+
+    color_map_1c44ec009c6e8f1bad707efba4a04053.xAxis = d3.svg.axis()
+        .scale(color_map_1c44ec009c6e8f1bad707efba4a04053.x)
+        .orient("top")
+        .tickSize(1)
+        .tickValues([4650.0, 4766.666666666667, 4883.333333333333, 5000.0]);
+
+    color_map_1c44ec009c6e8f1bad707efba4a04053.svg = d3.select(".legend.leaflet-control").append("svg")
+        .attr("id", 'legend')
+        .attr("width", 450)
+        .attr("height", 40);
+
+    color_map_1c44ec009c6e8f1bad707efba4a04053.g = color_map_1c44ec009c6e8f1bad707efba4a04053.svg.append("g")
+        .attr("class", "key")
+        .attr("transform", "translate(25,16)");
+
+    color_map_1c44ec009c6e8f1bad707efba4a04053.g.selectAll("rect")
+        .data(color_map_1c44ec009c6e8f1bad707efba4a04053.color.range().map(function(d, i) {
+          return {
+            x0: i ? color_map_1c44ec009c6e8f1bad707efba4a04053.x(color_map_1c44ec009c6e8f1bad707efba4a04053.color.domain()[i - 1]) : color_map_1c44ec009c6e8f1bad707efba4a04053.x.range()[0],
+            x1: i < color_map_1c44ec009c6e8f1bad707efba4a04053.color.domain().length ? color_map_1c44ec009c6e8f1bad707efba4a04053.x(color_map_1c44ec009c6e8f1bad707efba4a04053.color.domain()[i]) : color_map_1c44ec009c6e8f1bad707efba4a04053.x.range()[1],
+            z: d
+          };
+        }))
+      .enter().append("rect")
+        .attr("height", 40 - 30)
+        .attr("x", function(d) { return d.x0; })
+        .attr("width", function(d) { return d.x1 - d.x0; })
+        .style("fill", function(d) { return d.z; });
+
+    color_map_1c44ec009c6e8f1bad707efba4a04053.g.call(color_map_1c44ec009c6e8f1bad707efba4a04053.xAxis).append("text")
+        .attr("class", "caption")
+        .attr("y", 21)
+        .text("\uc5f0\ud3c9\uade0 \uc77c\uc0ac\ub7c9 (\uc608\uc2dc)");
+    
+            var feature_group_99ffc59ebcde9d3848b7cf5607ab304e = L.featureGroup(
+                {}
+            ).addTo(map_c34983236d6c819e185dea0a5e90a0b1);
+        
+    
+            var marker_cluster_4d6825977c3e5aa25ba1c4353d725add = L.markerClusterGroup(
+                {}
+            );
+            feature_group_99ffc59ebcde9d3848b7cf5607ab304e.addLayer(marker_cluster_4d6825977c3e5aa25ba1c4353d725add);
+        
+    
+            var marker_8429c59c60ba6d08a2c301919f411f34 = L.marker(
+                [35.9595092, 129.0736592],
+                {}
+            ).addTo(marker_cluster_4d6825977c3e5aa25ba1c4353d725add);
+        
+    
+            var div_icon_05611ff3c1a660961caa1d4a8b6bcc67 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_8429c59c60ba6d08a2c301919f411f34.setIcon(div_icon_05611ff3c1a660961caa1d4a8b6bcc67);
+        
+    
+            marker_8429c59c60ba6d08a2c301919f411f34.bindTooltip(
+                `<div>
+                     고경태양광발전소
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_0cfde21f3ce394eedaa74ba7544ec540 = L.marker(
+                [35.7801541, 128.731602],
+                {}
+            ).addTo(marker_cluster_4d6825977c3e5aa25ba1c4353d725add);
+        
+    
+            var div_icon_196e8f231b94af0c0206c9312e6774b6 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_0cfde21f3ce394eedaa74ba7544ec540.setIcon(div_icon_196e8f231b94af0c0206c9312e6774b6);
+        
+    
+            marker_0cfde21f3ce394eedaa74ba7544ec540.bindTooltip(
+                `<div>
+                     제2수송단태양광발전소
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_631436c5cc06fc0b065ad3e95421738d = L.marker(
+                [36.2453381, 128.5980041],
+                {}
+            ).addTo(marker_cluster_4d6825977c3e5aa25ba1c4353d725add);
+        
+    
+            var div_icon_b58c3697dfd8e33827ac5bb16ec81fd6 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_631436c5cc06fc0b065ad3e95421738d.setIcon(div_icon_b58c3697dfd8e33827ac5bb16ec81fd6);
+        
+    
+            marker_631436c5cc06fc0b065ad3e95421738d.bindTooltip(
+                `<div>
+                     순수햇빛발전(주)태양광발전소
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_9376277190d282f64ed7a62be7dff497 = L.marker(
+                [36.7009351, 128.1383791],
+                {}
+            ).addTo(marker_cluster_4d6825977c3e5aa25ba1c4353d725add);
+        
+    
+            var div_icon_aacb671f91e0dbb555260d5c7f93e083 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_9376277190d282f64ed7a62be7dff497.setIcon(div_icon_aacb671f91e0dbb555260d5c7f93e083);
+        
+    
+            marker_9376277190d282f64ed7a62be7dff497.bindTooltip(
+                `<div>
+                     해토태양광발전소
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_22c72895fdababc84e283ba12f418b00 = L.marker(
+                [36.8854929, 128.6374363],
+                {}
+            ).addTo(marker_cluster_4d6825977c3e5aa25ba1c4353d725add);
+        
+    
+            var div_icon_31d706d4a5d481bff6011eba95b88126 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_22c72895fdababc84e283ba12f418b00.setIcon(div_icon_31d706d4a5d481bff6011eba95b88126);
+        
+    
+            marker_22c72895fdababc84e283ba12f418b00.bindTooltip(
+                `<div>
+                     (주)씨그마이티엔
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var feature_group_aaf57a6aba7f4bd648c92247553188b6 = L.featureGroup(
+                {}
+            ).addTo(map_c34983236d6c819e185dea0a5e90a0b1);
+        
+    
+            var marker_cluster_a8c13dea218acd118078c89bc49ae3fb = L.markerClusterGroup(
+                {}
+            );
+            feature_group_aaf57a6aba7f4bd648c92247553188b6.addLayer(marker_cluster_a8c13dea218acd118078c89bc49ae3fb);
+        
+    
+            var marker_f7fcb2e8ba23b038e76c4f7cc608f454 = L.marker(
+                [35.281603, 128.9784927],
+                {}
+            ).addTo(marker_cluster_a8c13dea218acd118078c89bc49ae3fb);
+        
+    
+            var div_icon_316222917aa813e0f11d62acd9bb43e6 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_f7fcb2e8ba23b038e76c4f7cc608f454.setIcon(div_icon_316222917aa813e0f11d62acd9bb43e6);
+        
+    
+            marker_f7fcb2e8ba23b038e76c4f7cc608f454.bindTooltip(
+                `<div>
+                     세일솔라 주식회사[세일솔라 덕산(3MW) 태양광발전소]
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_82f5e8c83290b30f78ab61eac7adc2b9 = L.marker(
+                [35.115067, 128.129915],
+                {}
+            ).addTo(marker_cluster_a8c13dea218acd118078c89bc49ae3fb);
+        
+    
+            var div_icon_b51adcc686671ca36a9c33742bbee1d7 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_82f5e8c83290b30f78ab61eac7adc2b9.setIcon(div_icon_b51adcc686671ca36a9c33742bbee1d7);
+        
+    
+            marker_82f5e8c83290b30f78ab61eac7adc2b9.bindTooltip(
+                `<div>
+                     한국농어촌공사 사천지사(두량태양광발전소)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_ab7b1fa97bd8f1e09882f74bdf3b68ff = L.marker(
+                [35.19211, 128.701525],
+                {}
+            ).addTo(marker_cluster_a8c13dea218acd118078c89bc49ae3fb);
+        
+    
+            var div_icon_818cb0e022ac49800dd032f1acdafeee = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_ab7b1fa97bd8f1e09882f74bdf3b68ff.setIcon(div_icon_818cb0e022ac49800dd032f1acdafeee);
+        
+    
+            marker_ab7b1fa97bd8f1e09882f74bdf3b68ff.bindTooltip(
+                `<div>
+                     케이에스솔라(주)(GMK 창원공장 태양광발전소)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_5437bf70770bfd9009a6c73bc215e06d = L.marker(
+                [35.0774302, 128.0649578],
+                {}
+            ).addTo(marker_cluster_a8c13dea218acd118078c89bc49ae3fb);
+        
+    
+            var div_icon_5f690cdd69361b5d280593635f0b1576 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_5437bf70770bfd9009a6c73bc215e06d.setIcon(div_icon_5f690cdd69361b5d280593635f0b1576);
+        
+    
+            marker_5437bf70770bfd9009a6c73bc215e06d.bindTooltip(
+                `<div>
+                     코리아에너지발전소(주) 1호기
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_1bb38e294fc363da122d171614aa0f56 = L.marker(
+                [35.2925874, 129.0117573],
+                {}
+            ).addTo(marker_cluster_a8c13dea218acd118078c89bc49ae3fb);
+        
+    
+            var div_icon_a30ea14118068a1bc3c351107c84c241 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_1bb38e294fc363da122d171614aa0f56.setIcon(div_icon_a30ea14118068a1bc3c351107c84c241);
+        
+    
+            marker_1bb38e294fc363da122d171614aa0f56.bindTooltip(
+                `<div>
+                     양산솔라태양광발전소
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var feature_group_2c61f18801b0224efb3be3c3dcf84e7b = L.featureGroup(
+                {}
+            ).addTo(map_c34983236d6c819e185dea0a5e90a0b1);
+        
+    
+            var marker_cluster_7e002367a83c405e73a00f5e93cd914d = L.markerClusterGroup(
+                {}
+            );
+            feature_group_2c61f18801b0224efb3be3c3dcf84e7b.addLayer(marker_cluster_7e002367a83c405e73a00f5e93cd914d);
+        
+    
+            var marker_a7a85acf48c6d383abc691608a388145 = L.marker(
+                [36.978109, 126.7547192],
+                {}
+            ).addTo(marker_cluster_7e002367a83c405e73a00f5e93cd914d);
+        
+    
+            var div_icon_f3b37f2ed12dc0c25d693334a9ac2294 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_a7a85acf48c6d383abc691608a388145.setIcon(div_icon_f3b37f2ed12dc0c25d693334a9ac2294);
+        
+    
+            marker_a7a85acf48c6d383abc691608a388145.bindTooltip(
+                `<div>
+                     동부당진솔라㈜
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_52aa923c5c6b9ab969abd3385a613106 = L.marker(
+                [37.0216299, 126.5105981],
+                {}
+            ).addTo(marker_cluster_7e002367a83c405e73a00f5e93cd914d);
+        
+    
+            var div_icon_3f3daaa7998750a0f8cc5f2b75500e58 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_52aa923c5c6b9ab969abd3385a613106.setIcon(div_icon_3f3daaa7998750a0f8cc5f2b75500e58);
+        
+    
+            marker_52aa923c5c6b9ab969abd3385a613106.bindTooltip(
+                `<div>
+                     한전쏠라13-3호 태양광발전소
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_486833cae9825f8f83ba09337f88831c = L.marker(
+                [36.6114134, 126.3309592],
+                {}
+            ).addTo(marker_cluster_7e002367a83c405e73a00f5e93cd914d);
+        
+    
+            var div_icon_fcb7b4501fe1e0c533d667f4a9c9287b = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_486833cae9825f8f83ba09337f88831c.setIcon(div_icon_fcb7b4501fe1e0c533d667f4a9c9287b);
+        
+    
+            marker_486833cae9825f8f83ba09337f88831c.bindTooltip(
+                `<div>
+                     당암발전5호
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_9f571e6cc9b365f7844aded8888f7d61 = L.marker(
+                [36.7963187, 126.6998657],
+                {}
+            ).addTo(marker_cluster_7e002367a83c405e73a00f5e93cd914d);
+        
+    
+            var div_icon_7d6028e39b6720ff1fb81fd1d7029da2 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_9f571e6cc9b365f7844aded8888f7d61.setIcon(div_icon_7d6028e39b6720ff1fb81fd1d7029da2);
+        
+    
+            marker_9f571e6cc9b365f7844aded8888f7d61.bindTooltip(
+                `<div>
+                     쎈태양광 3호 발전소
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var marker_79ac582142b857de0ef7a4f4cd004b1b = L.marker(
+                [36.8640524, 126.3935127],
+                {}
+            ).addTo(marker_cluster_7e002367a83c405e73a00f5e93cd914d);
+        
+    
+            var div_icon_323ddd615a9aecb3468fc51089ff4fc8 = L.divIcon({"className": "fa-divicon", "html": "\n        \u003cdiv style=\"width:40px;height:40px;display:flex;align-items:center;justify-content:center;pointer-events:auto;\"\u003e\n            \u003ci class=\"fa-solid fa-solar-panel\"\n                style=\"font-size:34px;line-height:1;color:#f59e0b;filter:drop-shadow(0 0 1px rgba(0,0,0,.35));\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        ", "iconAnchor": [20, 20], "iconSize": [40, 40]});
+            marker_79ac582142b857de0ef7a4f4cd004b1b.setIcon(div_icon_323ddd615a9aecb3468fc51089ff4fc8);
+        
+    
+            marker_79ac582142b857de0ef7a4f4cd004b1b.bindTooltip(
+                `<div>
+                     연화 2호 태양광발전소
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var heat_map_25f16538b1e21bc90b5e420cca4f773e = L.heatLayer(
+                [[35.9595092, 129.0736592, 1.1], [35.7801541, 128.731602, 0.44348332685863456], [36.2453381, 128.5980041, 0.11803869267693086], [36.7009351, 128.1383791, 0.11803869267693086], [36.8854929, 128.6374363, 0.11675122007059158], [35.281603, 128.9784927, 0.1223291524225979], [35.115067, 128.129915, 0.11127773701593788], [35.19211, 128.701525, 0.11023996453510718], [35.0774302, 128.0649578, 0.10071639938952914], [35.2925874, 129.0117573, 0.1], [36.978109, 126.7547192, 0.11739497568829355], [37.0216299, 126.5105981, 0.11739497568829355], [36.6114134, 126.3309592, 0.11739497568829355], [36.7963187, 126.6998657, 0.11739497568829355], [36.8640524, 126.3935127, 0.11739497568829355]],
+                {"blur": 22, "maxZoom": 18, "minOpacity": 0.25, "radius": 18}
+            ).addTo(map_c34983236d6c819e185dea0a5e90a0b1);
+        
+    
+            var layer_control_e855bef5ba22ce25ce66d44bbd8cd440 = {
+                base_layers : {
+                    "cartodbpositron" : tile_layer_b291bbd31d616fbe5600256850f59452,
+                },
+                overlays :  {
+                    "\ud6c4\ubcf4\uc9c0" : feature_group_fa9086519a9446cebdfe60cc25ed0d1a,
+                    "\uae30\uc874 \uc124\ube44 (\uacbd\ubd81)" : feature_group_99ffc59ebcde9d3848b7cf5607ab304e,
+                    "\uae30\uc874 \uc124\ube44 (\uacbd\ub0a8)" : feature_group_aaf57a6aba7f4bd648c92247553188b6,
+                    "\uae30\uc874 \uc124\ube44 (\ucda9\ub0a8)" : feature_group_2c61f18801b0224efb3be3c3dcf84e7b,
+                    "\ubc00\uc9d1\ub3c4(\uc6a9\ub7c9\uac00\uc911)" : heat_map_25f16538b1e21bc90b5e420cca4f773e,
+                },
+            };
+            L.control.layers(
+                layer_control_e855bef5ba22ce25ce66d44bbd8cd440.base_layers,
+                layer_control_e855bef5ba22ce25ce66d44bbd8cd440.overlays,
+                {"autoZIndex": true, "collapsed": true, "position": "topright"}
+            ).addTo(map_c34983236d6c819e185dea0a5e90a0b1);
+            heat_map_25f16538b1e21bc90b5e420cca4f773e.remove();
+        
+</script>
+</html></div>
+    </section>
+
+    <!-- 태양광 후보지 발전소: 후보지 요약 -->
+    <div id="candidates" class="anchor"></div>
+    <div class="header" style="margin-top:24px">
+        <span class="badge">태양광 후보지 발전소</span>
+        <h1>후보지 요약</h1>
+        <p> <p>
+    </div>
+    <section class="card">
+        <ul style="margin:6px 0 0 18px;line-height:1.8">
+        
+<li style="margin:10px 0">
+    <details open>
+        <summary class="site-summary">
+            <span class="site-name">충남 논산시</span>
+            — 좌표: 36.18391, 127.14467 (일사량: 4,700 MJ/m²)
+        </summary>
+        <div style='margin-top:8px'><b>✅ 장점</b><ul style='margin:6px 0 8px 20px'><li>넓은 농업 평지 → 대규모 태양광 단지 개발 유리.</li><li>군부대·농업지 중심 지역이라 토지 확보 상대적으로 용이.</li></ul></div>
+        <div style='margin-top:4px'><b>⚠️ 단점</b><ul style='margin:6px 0 0 20px'><li>농업지 활용 시 주민 민원(경관·농지 전용)이 발생할 수 있음.</li></ul></div>
+    </details>
+</li>
+
+<li style="margin:10px 0">
+    <details open>
+        <summary class="site-summary">
+            <span class="site-name">충남 예산군</span>
+            — 좌표: 36.69173, 126.81420 (일사량: 4,650 MJ/m²)
+        </summary>
+        <div style='margin-top:8px'><b>✅ 장점</b><ul style='margin:6px 0 8px 20px'><li>삽교천 유역 평야로 평탄지 많음 → 설치 용이.</li><li>수도권과 비교적 가까워 송전 부담 적음.</li><li>충남도가 신재생에너지 정책을 적극 추진하는 지역.</li></ul></div>
+        <div style='margin-top:4px'><b>⚠️ 단점</b><ul style='margin:6px 0 0 20px'><li>삽교천 유역은 홍수·침수 리스크 존재</li></ul></div>
+    </details>
+</li>
+
+<li style="margin:10px 0">
+    <details open>
+        <summary class="site-summary">
+            <span class="site-name">경북 포항시 남구</span>
+            — 좌표: 36.00653, 129.38901 (일사량: 5,000 MJ/m²)
+        </summary>
+        <div style='margin-top:8px'><b>✅ 장점</b><ul style='margin:6px 0 8px 20px'><li>산업단지 활용 가능 → 전력 수요와 직접 연결 → 송배전 효율 ↑.</li><li>동해안에 위치해 신항만·산업 기반과 연계 가능성 큼.</li></ul></div>
+        <div style='margin-top:4px'><b>⚠️ 단점</b><ul style='margin:6px 0 0 20px'><li>해안 지역 → 태풍, 염해(바닷바람에 의한 부식) 리스크 존재.</li><li>산업지 토지 비용이 높을 수 있고, 용도 변경 절차 복잡.</li></ul></div>
+    </details>
+</li>
+
+<li style="margin:10px 0">
+    <details open>
+        <summary class="site-summary">
+            <span class="site-name">경북 구미시</span>
+            — 좌표: 36.21176, 128.34571 (일사량: 4,900 MJ/m²)
+        </summary>
+        <div style='margin-top:8px'><b>✅ 장점</b><ul style='margin:6px 0 8px 20px'><li>낙동강 평지 → 대규모 설비 부지 확보 용이.</li><li>구미 국가산업단지 전력 수요지 인접 → 산업용 전력 직접 공급 가능.</li><li>내륙 입지로 기후 안정성 높음.</li></ul></div>
+        <div style='margin-top:4px'><b>⚠️ 단점</b><ul style='margin:6px 0 0 20px'><li>산업단지 주변은 환경 규제(경관·수질 등) 고려 필요.</li></ul></div>
+    </details>
+</li>
+
+<li style="margin:10px 0">
+    <details open>
+        <summary class="site-summary">
+            <span class="site-name">경남 창녕군</span>
+            — 좌표: 35.46545, 128.47379 (일사량: 4,850 MJ/m²)
+        </summary>
+        <div style='margin-top:8px'><b>✅ 장점</b><ul style='margin:6px 0 8px 20px'><li>농업·축산 중심 지역 → 주민참여형 태양광(영농형, 축사형 등) 확장성 큼.</li></ul></div>
+        <div style='margin-top:4px'><b>⚠️ 단점</b><ul style='margin:6px 0 0 20px'><li>농업 중심지라 주민 수용성 확보 필요.</li></ul></div>
+    </details>
+</li>
+
+<li style="margin:10px 0">
+    <details open>
+        <summary class="site-summary">
+            <span class="site-name">경남 김해시</span>
+            — 좌표: 35.24954, 128.84220 (일사량: 4,950 MJ/m²)
+        </summary>
+        <div style='margin-top:8px'><b>✅ 장점</b><ul style='margin:6px 0 8px 20px'><li>부산권 대도시와 매우 가까워 전력 소비지 인접성 최고.</li><li>도시와 농업지역이 혼재 → 다양한 형태의 태양광 에너지 활용 가능</li></ul></div>
+        <div style='margin-top:4px'><b>⚠️ 단점</b><ul style='margin:6px 0 0 20px'><li>도시 확장으로 인한 토지 용도 제한 가능성.</li></ul></div>
+    </details>
+</li>
+        </ul>
+    </section>
+
+    </main>
+</div>
+</body>
+</html>
