@@ -1,4 +1,4 @@
-<h1 align="middle">태양광 발전 효율 및 최적 입지 분석</h1>
+<h1 align="middle">☀️ 태양광 발전 효율 및 최적 입지 분석 </h1>
 
 <h5 align="middle">배포 URL : https://taehyunan-99.github.io/project_seasonal_renewable_energy/</h5>
 
@@ -52,12 +52,23 @@
 | <div align="center">- 전체 일정 관리<br/>- 데이터 전처리<br/>- 데이터 재구성</div> | <div align="center">- 데이터 통계 및 분석<br/>- HTML 구현<br/>- PPT 제작</div> | <div align="center">- 데이터 수집<br/>- 데이터 시각화 구현</div> |
 | <div align="center"><a href="https://github.com/taehyunan-99"><img src="https://img.shields.io/badge/github-181717?style=flat-square&logo=github&logoColor=white"/></a><br/><a href="https://velog.io/@taehyunan817/posts"><img src="https://img.shields.io/badge/velog-20C997?style=flat-square&logo=velog&logoColor=white"/></a></div> | <div align="center"><a href=""><img src="https://img.shields.io/badge/github-181717?style=flat-square&logo=github&logoColor=white"/></a><br/><a href=""><img src="https://img.shields.io/badge/velog-20C997?style=flat-square&logo=velog&logoColor=white"/></a></div> | <div align="center"><a href=""><img src="https://img.shields.io/badge/github-181717?style=flat-square&logo=github&logoColor=white"/></a><br/><a href=""><img src="https://img.shields.io/badge/velog-20C997?style=flat-square&logo=velog&logoColor=white"/></a></div> |
 
-
 </div>
 
 <br/>
 
 ## 3. 개발 기간 및 일정 관리
+
+### 전체 개발 기간
+
+2025년 08월 13일 - 2025년 08월 25일
+
+<br/>
+
+### 일정 관리
+
+Notion 기반 프로젝트 관리 시스템 구축 - 일정 계획, 작업 배분, 진행도 모니터링
+
+<a href=""><img src="https://img.shields.io/badge/notion-%23000000.svg?&style=for-the-badge&logo=notion&logoColor=white" /></a>
 
 <br/>
 
